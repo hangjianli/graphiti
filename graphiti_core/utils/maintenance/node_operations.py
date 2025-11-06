@@ -99,26 +99,26 @@ async def extract_nodes(
     entities_missed = True
     reflexion_iterations = 0
 
-    entity_types_context = [
-        {
-            'entity_type_id': 0,
-            'entity_type_name': 'Entity',
-            'entity_type_description': 'Default entity classification. Use this entity type if the entity is not one of the other listed types.',
-        }
-    ]
-
-    entity_types_context += (
-        [
+    # Only use custom entity types if provided, otherwise include default Entity
+    if entity_types is not None and len(entity_types) > 0:
+        # Use only custom entity types, starting from ID 0
+        entity_types_context = [
             {
-                'entity_type_id': i + 1,
+                'entity_type_id': i,
                 'entity_type_name': type_name,
                 'entity_type_description': type_model.__doc__,
             }
             for i, (type_name, type_model) in enumerate(entity_types.items())
         ]
-        if entity_types is not None
-        else []
-    )
+    else:
+        # Fallback to default Entity type if no custom types provided
+        entity_types_context = [
+            {
+                'entity_type_id': 0,
+                'entity_type_name': 'Entity',
+                'entity_type_description': 'Default entity classification. Use this entity type if the entity is not one of the other listed types.',
+            }
+        ]
 
     context = {
         'episode_content': episode.content,
@@ -184,14 +184,25 @@ async def extract_nodes(
                 'entity_type_name'
             )
         else:
-            entity_type_name = 'Entity'
+            # Skip entities with invalid type IDs when using custom types only
+            if entity_types is not None and len(entity_types) > 0:
+                logger.warning(f'Skipping entity "{extracted_entity.name}" with invalid type_id {type_id}')
+                continue
+            else:
+                entity_type_name = 'Entity'
 
         # Check if this entity type should be excluded
         if excluded_entity_types and entity_type_name in excluded_entity_types:
             logger.debug(f'Excluding entity "{extracted_entity.name}" of type "{entity_type_name}"')
             continue
 
-        labels: list[str] = list({'Entity', str(entity_type_name)})
+        # Only include 'Entity' label if we're using the default Entity type
+        if entity_types is not None and len(entity_types) > 0:
+            # Custom types only - don't include 'Entity' label
+            labels = [str(entity_type_name)]
+        else:
+            # Default behavior - include both 'Entity' and the specific type
+            labels = list({'Entity', str(entity_type_name)})
 
         new_node = EntityNode(
             name=extracted_entity.name,
@@ -468,7 +479,7 @@ async def extract_attributes_from_nodes(
                 episode,
                 previous_episodes,
                 (
-                    entity_types.get(next((item for item in node.labels if item != 'Entity'), ''))
+                    entity_types.get(next((item for item in node.labels if item != 'Entity'), node.labels[0] if node.labels else ''))
                     if entity_types is not None
                     else None
                 ),
