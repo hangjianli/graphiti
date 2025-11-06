@@ -489,14 +489,20 @@ class EntityNode(Node):
 
         if driver.provider == GraphProvider.KUZU:
             entity_data['attributes'] = json.dumps(self.attributes)
-            entity_data['labels'] = list(set(self.labels + ['Entity']))
+            # Only add 'Entity' label if not already present (for backward compatibility)
+            labels_with_entity = self.labels 
+            # + (['Entity'] if 'Entity' not in self.labels else [])
+            entity_data['labels'] = list(set(labels_with_entity))
             result = await driver.execute_query(
                 get_entity_node_save_query(driver.provider, labels=''),
                 **entity_data,
             )
         else:
             entity_data.update(self.attributes or {})
-            labels = ':'.join(self.labels + ['Entity'])
+            # Only add 'Entity' label if not already present (for backward compatibility)
+            labels_with_entity = self.labels 
+            # + (['Entity'] if 'Entity' not in self.labels else [])
+            labels = ':'.join(labels_with_entity)
 
             result = await driver.execute_query(
                 get_entity_node_save_query(driver.provider, labels),

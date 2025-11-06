@@ -162,7 +162,8 @@ def validate_excluded_entity_types(
         return True
 
     # Build set of available type names
-    available_types = {'Entity'}  # Default type is always available
+    # available_types = {'Entity'}  # Default type is always available
+    available_types = set()
     if entity_types:
         available_types.update(entity_types.keys())
 

@@ -97,6 +97,11 @@ async def extract_edges(
 ) -> list[EntityEdge]:
     start = time()
 
+    # If no custom edge types are provided, don't extract any edges
+    if edge_types is None or len(edge_types) == 0:
+        logger.debug('No custom edge types provided, skipping edge extraction')
+        return []
+
     extract_edges_max_tokens = 16384
     llm_client = clients.llm_client
 
@@ -323,10 +328,10 @@ async def resolve_extracted_edges(
         source_node = uuid_entity_map.get(extracted_edge.source_node_uuid)
         target_node = uuid_entity_map.get(extracted_edge.target_node_uuid)
         source_node_labels = (
-            source_node.labels + ['Entity'] if source_node is not None else ['Entity']
+            source_node.labels if source_node is not None else []
         )
         target_node_labels = (
-            target_node.labels + ['Entity'] if target_node is not None else ['Entity']
+            target_node.labels if target_node is not None else []
         )
         label_tuples = [
             (source_label, target_label)
@@ -346,19 +351,29 @@ async def resolve_extracted_edges(
 
         edge_types_lst.append(extracted_edge_types)
 
-    for extracted_edge, extracted_edge_types in zip(extracted_edges, edge_types_lst, strict=True):
+    # Filter edges to only include those with valid custom types
+    filtered_edges = []
+    filtered_edge_types_lst = []
+    filtered_related_edges_lists = []
+    filtered_edge_invalidation_candidates = []
+    
+    for i, (extracted_edge, extracted_edge_types) in enumerate(zip(extracted_edges, edge_types_lst, strict=True)):
         allowed_type_names = set(extracted_edge_types)
         is_custom_name = extracted_edge.name in custom_type_names
+        
+        # Skip edges that don't have valid custom types
         if not allowed_type_names:
-            # No custom types are valid for this node pairing. Keep LLM generated
-            # labels, but flip disallowed custom names back to the default.
-            if is_custom_name and extracted_edge.name != DEFAULT_EDGE_NAME:
-                extracted_edge.name = DEFAULT_EDGE_NAME
+            logger.debug(f'Skipping edge "{extracted_edge.name}" - no valid custom types for node pairing')
             continue
         if is_custom_name and extracted_edge.name not in allowed_type_names:
-            # Custom name exists but it is not permitted for this source/target
-            # signature, so fall back to the default edge label.
-            extracted_edge.name = DEFAULT_EDGE_NAME
+            logger.debug(f'Skipping edge "{extracted_edge.name}" - not allowed for this node pairing')
+            continue
+            
+        # Keep this edge
+        filtered_edges.append(extracted_edge)
+        filtered_edge_types_lst.append(extracted_edge_types)
+        filtered_related_edges_lists.append(related_edges_lists[i])
+        filtered_edge_invalidation_candidates.append(edge_invalidation_candidates[i])
 
     # resolve edges with related edges in the graph and find invalidation candidates
     results: list[tuple[EntityEdge, list[EntityEdge], list[EntityEdge]]] = list(
@@ -374,10 +389,10 @@ async def resolve_extracted_edges(
                     custom_type_names,
                 )
                 for extracted_edge, related_edges, existing_edges, extracted_edge_types in zip(
-                    extracted_edges,
-                    related_edges_lists,
-                    edge_invalidation_candidates,
-                    edge_types_lst,
+                    filtered_edges,
+                    filtered_related_edges_lists,
+                    filtered_edge_invalidation_candidates,
+                    filtered_edge_types_lst,
                     strict=True,
                 )
             ]
@@ -603,8 +618,8 @@ async def resolve_extracted_edge(
             resolved_edge.attributes = edge_attributes_response
     elif not is_default_type and is_custom_type:
         # The LLM picked a custom type that is not allowed for this signature.
-        # Reset to the default label and drop any structured attributes.
-        resolved_edge.name = DEFAULT_EDGE_NAME
+        # When using custom types only, keep the LLM-generated name but don't extract attributes.
+        resolved_edge.name = fact_type
         resolved_edge.attributes = {}
     elif not is_default_type:
         # Non-custom labels are allowed to pass through so long as the LLM does

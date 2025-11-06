@@ -115,14 +115,22 @@ class BaseOpenAIClient(LLMClient):
 
     def _handle_structured_response(self, response: Any) -> dict[str, Any]:
         """Handle structured response parsing and validation."""
+        logger.debug(f'Handling structured response: {type(response)}, has output_text: {hasattr(response, "output_text")}')
+        
+        if not hasattr(response, 'output_text'):
+            logger.error(f'Response missing output_text attribute. Response type: {type(response)}, attributes: {dir(response)}')
+            raise Exception(f'Invalid response structure from LLM: missing output_text attribute')
+            
         response_object = response.output_text
+        logger.debug(f'Response object: {type(response_object)}, value: {response_object}')
 
         if response_object:
             return json.loads(response_object)
-        elif response_object is not None and response_object.refusal:
+        elif response_object is not None and hasattr(response_object, 'refusal') and response_object.refusal:
             raise RefusalError(response_object.refusal)
         else:
-            raise Exception(f'Invalid response from LLM: {response_object.model_dump() if response_object else "None response"}')
+            logger.error(f'Invalid response from LLM - response_object is None or empty. Full response: {response}')
+            raise Exception(f'Invalid response from LLM: {response_object.model_dump() if response_object and hasattr(response_object, "model_dump") else "None response"}')
 
     def _handle_json_response(self, response: Any) -> dict[str, Any]:
         """Handle JSON response parsing."""

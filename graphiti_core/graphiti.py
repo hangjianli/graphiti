@@ -416,9 +416,10 @@ class Graphiti:
         nodes: list[EntityNode],
         entity_edges: list[EntityEdge],
         now: datetime,
+        create_episodic_edges: bool = True,
     ) -> tuple[list[EpisodicEdge], EpisodicNode]:
         """Process and save episode data to the graph."""
-        episodic_edges = build_episodic_edges(nodes, episode.uuid, now)
+        episodic_edges = build_episodic_edges(nodes, episode.uuid, now) if create_episodic_edges else []
         episode.entity_edges = [edge.uuid for edge in entity_edges]
 
         if not self.store_raw_episode_content:
@@ -731,11 +732,11 @@ class Graphiti:
                     )
                 )
 
-                # Create default edge type map
+                # Only create edge type map if custom edge types are provided
                 edge_type_map_default = (
-                    {('Entity', 'Entity'): list(edge_types.keys())}
-                    if edge_types is not None
-                    else {('Entity', 'Entity'): []}
+                    {}  # No default mappings - only use custom edge_type_map if provided
+                    if edge_types is not None and len(edge_types) > 0
+                    else {}
                 )
 
                 # Extract and resolve nodes
@@ -771,8 +772,10 @@ class Graphiti:
                 entity_edges = resolved_edges + invalidated_edges
 
                 # Process and save episode data
+                # Only create episodic edges if we have custom entity types (disable default MENTIONS edges)
+                create_episodic_edges = entity_types is not None and len(entity_types) > 0
                 episodic_edges, episode = await self._process_episode_data(
-                    episode, hydrated_nodes, entity_edges, now
+                    episode, hydrated_nodes, entity_edges, now, create_episodic_edges
                 )
 
                 # Update communities if requested
@@ -886,11 +889,11 @@ class Graphiti:
                         self.driver = self.driver.clone(database=group_id)
                         self.clients.driver = self.driver
 
-                # Create default edge type map
+                # Only create edge type map if custom edge types are provided
                 edge_type_map_default = (
-                    {('Entity', 'Entity'): list(edge_types.keys())}
-                    if edge_types is not None
-                    else {('Entity', 'Entity'): []}
+                    {}  # No default mappings - only use custom edge_type_map if provided
+                    if edge_types is not None and len(edge_types) > 0
+                    else {}
                 )
 
                 episodes = [
@@ -935,10 +938,12 @@ class Graphiti:
                     excluded_entity_types,
                 )
 
-                # Create Episodic Edges
+                # Create Episodic Edges (only if we have custom entity types)
                 episodic_edges: list[EpisodicEdge] = []
-                for episode_uuid, nodes in nodes_by_episode.items():
-                    episodic_edges.extend(build_episodic_edges(nodes, episode_uuid, now))
+                create_episodic_edges = entity_types is not None and len(entity_types) > 0
+                if create_episodic_edges:
+                    for episode_uuid, nodes in nodes_by_episode.items():
+                        episodic_edges.extend(build_episodic_edges(nodes, episode_uuid, now))
 
                 # Re-map edge pointers and dedupe edges
                 extracted_edges_bulk_updated: list[list[EntityEdge]] = [

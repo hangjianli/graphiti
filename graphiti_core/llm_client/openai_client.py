@@ -15,6 +15,7 @@ limitations under the License.
 """
 
 import json
+import logging
 import typing
 from typing import Any
 
@@ -24,6 +25,8 @@ from pydantic import BaseModel
 
 from .config import DEFAULT_MAX_TOKENS, LLMConfig
 from .openai_base_client import DEFAULT_REASONING, DEFAULT_VERBOSITY, BaseOpenAIClient
+
+logger = logging.getLogger(__name__)
 
 
 class OpenAIClient(BaseOpenAIClient):
@@ -167,19 +170,37 @@ class OpenAIClient(BaseOpenAIClient):
         
         ensure_schema_compliance(schema)
         
-        response = await self.client.chat.completions.create(**completion_params,
-            response_format={
-                'type': 'json_schema',
-                'json_schema': {
-                    'name': response_model.__name__,
-                    'schema': schema,
-                    'strict': True
+        try:
+            response = await self.client.chat.completions.create(**completion_params,
+                response_format={
+                    'type': 'json_schema',
+                    'json_schema': {
+                        'name': response_model.__name__,
+                        'schema': schema,
+                        'strict': True
+                    }
                 }
-            }
-        )
-        
-        # Create a mock response object that matches the expected structure
-        return self._create_mock_parse_response(response, response_model)
+            )
+            
+            # Validate response structure
+            if not response or not hasattr(response, 'choices') or not response.choices:
+                raise Exception(f"Invalid API response structure: {response}")
+                
+            if not response.choices[0].message:
+                raise Exception(f"No message in API response: {response}")
+            
+            # Create a mock response object that matches the expected structure
+            return self._create_mock_parse_response(response, response_model)
+            
+        except Exception as e:
+            logger.error(f"Error in custom parse method: {str(e)}")
+            # Create a mock response with error information
+            class MockErrorResponse:
+                def __init__(self, error_msg: str):
+                    self.output_text = None
+                    self.refusal = f"API Error: {error_msg}"
+            
+            return MockErrorResponse(str(e))
     
     def _build_schema_instruction(
         self, 

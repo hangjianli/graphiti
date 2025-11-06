@@ -112,6 +112,7 @@ async def extract_nodes(
         ]
     else:
         # Fallback to default Entity type if no custom types provided
+        logger.warning('No custom entity types provided, falling back to default Entity type!')
         entity_types_context = [
             {
                 'entity_type_id': 0,
@@ -202,6 +203,7 @@ async def extract_nodes(
             labels = [str(entity_type_name)]
         else:
             # Default behavior - include both 'Entity' and the specific type
+            logger.warning(f'Adding default Entity label to node: {extracted_entity.name}')
             labels = list({'Entity', str(entity_type_name)})
 
         new_node = EntityNode(

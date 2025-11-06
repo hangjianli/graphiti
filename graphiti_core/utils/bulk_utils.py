@@ -175,7 +175,7 @@ async def add_nodes_and_edges_bulk_tx(
             'summary': node.summary,
             'created_at': node.created_at,
             'name_embedding': node.name_embedding,
-            'labels': list(set(node.labels + ['Entity'])),
+            'labels': list(set(node.labels)),
         }
 
         if driver.provider == GraphProvider.KUZU:
