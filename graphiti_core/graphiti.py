@@ -130,6 +130,7 @@ class Graphiti:
         self,
         uri: str | None = None,
         user: str | None = None,
+        db_name: str | None = None,
         password: str | None = None,
         llm_client: LLMClient | None = None,
         embedder: EmbedderClient | None = None,
@@ -200,7 +201,7 @@ class Graphiti:
         else:
             if uri is None:
                 raise ValueError('uri must be provided when graph_driver is None')
-            self.driver = Neo4jDriver(uri, user, password)
+            self.driver = Neo4jDriver(uri, user, password, database=db_name or 'neo4j')
 
         self.store_raw_episode_content = store_raw_episode_content
         self.max_coroutines = max_coroutines
