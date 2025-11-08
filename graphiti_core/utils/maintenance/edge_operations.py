@@ -124,6 +124,8 @@ async def extract_edges(
         else []
     )
 
+    logger.info(f"[HL] Edge type context: {edge_types_context}")
+
     # Prepare context for LLM
     context = {
         'episode_content': episode.content,
@@ -134,8 +136,12 @@ async def extract_edges(
         'previous_episodes': [ep.content for ep in previous_episodes],
         'reference_time': episode.valid_at,
         'edge_types': edge_types_context,
-        'custom_prompt': '',
+        'custom_prompt': """
+        The identified edges should reflect the relationship among JIRA diagnosis ticket, symptoms, investigation decisions, root cause, etc.
+        """
     }
+
+    logger.info(f"[HL] Context: {context}")
 
     facts_missed = True
     reflexion_iterations = 0
@@ -147,8 +153,11 @@ async def extract_edges(
             group_id=group_id,
             prompt_name='extract_edges.edge',
         )
-        edges_data = ExtractedEdges(**llm_response).edges
 
+        logger.info(f"[HL] LLM Response: {llm_response}")
+        edges_data = ExtractedEdges(**llm_response).edges
+        logger.info(f"[HL] Extracted edges: {edges_data}")
+        
         context['extracted_facts'] = [edge_data.fact for edge_data in edges_data]
 
         reflexion_iterations += 1
